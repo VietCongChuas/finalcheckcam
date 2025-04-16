@@ -1,109 +1,79 @@
 <!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Trò chơi chọn người trả bài</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        text-align: center;
-        background: #f0f0f0;
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Chọn người trả bài</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f2f2f2;
+    }
+    video {
+      border: 2px solid #333;
+      margin-top: 10px;
+    }
+    canvas {
+      position: absolute;
+      left: 50%;
+      top: 100px;
+      transform: translateX(-50%);
+    }
+    #startBtn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎯 Trò chơi chọn người trả bài bằng webcam</h1>
+  <button id="startBtn">📷 Bắt đầu nhận diện</button><br>
+  <video id="video" width="720" height="560" autoplay muted></video>
+
+  <script>
+    const video = document.getElementById('video');
+    const startBtn = document.getElementById('startBtn');
+
+    async function setupCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+        return new Promise((resolve) => {
+          video.onloadedmetadata = () => {
+            resolve(video);
+          };
+        });
+      } catch (err) {
+        alert("⚠️ Trình duyệt không được cấp quyền truy cập webcam!");
+        console.error(err);
       }
-      #wrapper {
-        position: relative;
-        display: inline-block;
-      }
-      video,
-      canvas {
-        width: 720px;
-        height: 560px;
-      }
-      canvas {
-        position: absolute;
-        top: 0;
-        left: 0;
-      }
-      #pickBtn {
-        margin-top: 20px;
-        font-size: 18px;
-        padding: 10px 20px;
-      }
-      #result {
-        margin-top: 15px;
-        font-size: 20px;
-        font-weight: bold;
-      }
-    </style>
-  </head>
-  <body>
-    <h2>🎯 Trò chơi chọn người trả bài bằng webcam</h2>
+    }
 
-    <div id="wrapper">
-      <video id="video" autoplay muted></video>
-      <canvas id="overlay"></canvas>
-    </div>
+    async function startRecognition() {
+      await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+      await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+      await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
 
-    <br />
-    <button id="pickBtn">🧙 Chọn ngẫu nhiên người trả bài</button>
-    <h3 id="result"></h3>
+      const canvas = faceapi.createCanvasFromMedia(video);
+      document.body.append(canvas);
+      const displaySize = { width: video.width, height: video.height };
+      faceapi.matchDimensions(canvas, displaySize);
 
-    <script>
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('overlay');
-      const context = canvas.getContext('2d');
-      const resultText = document.getElementById('result');
-      const pickBtn = document.getElementById('pickBtn');
+      setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        const resizedDetections = faceapi.resizeResults(detections, displaySize);
+        canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+        faceapi.draw.drawDetections(canvas, resizedDetections);
+      }, 500);
+    }
 
-      let detections = [];
-
-      // Load face-api model từ github chính chủ
-      const MODEL_URL = 'https://justadudewhohacks.github.io/face-api.js/models';
-
-      Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-      ]).then(startVideo);
-
-      async function startVideo() {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: {} });
-          video.srcObject = stream;
-        } catch (err) {
-          alert('Không thể truy cập webcam 😥');
-          console.error(err);
-        }
-      }
-
-      video.addEventListener('play', () => {
-        const displaySize = { width: video.width, height: video.height };
-        faceapi.matchDimensions(canvas, displaySize);
-
-        setInterval(async () => {
-          const detectionsAll = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-          detections = faceapi.resizeResults(detectionsAll, displaySize);
-
-          context.clearRect(0, 0, canvas.width, canvas.height);
-
-          detections.forEach((detection, i) => {
-            const box = detection.box;
-            context.strokeStyle = 'red';
-            context.lineWidth = 2;
-            context.strokeRect(box.x, box.y, box.width, box.height);
-            context.fillStyle = 'yellow';
-            context.font = '18px Arial';
-            context.fillText(`Người #${i + 1}`, box.x, box.y - 10);
-          });
-        }, 500);
-      });
-
-      pickBtn.addEventListener('click', () => {
-        if (detections.length === 0) {
-          resultText.textContent = '⚠️ Không có ai để gọi hết 😅';
-          return;
-        }
-        const pick = Math.floor(Math.random() * detections.length);
-        resultText.textContent = `🎉 Người phải trả bài là 👉 Người #${pick + 1}`;
-      });
-    </script>
-  </body>
+    startBtn.onclick = async () => {
+      await setupCamera();
+      await startRecognition();
+    };
+  </script>
+</body>
 </html>
